@@ -10,3 +10,5 @@ export { RateLimiter, DEFAULT_RATE_LIMIT_CONFIG } from "./rate-limiter.js";
 export type { RateLimitConfig, RateLimitResult } from "./rate-limiter.js";
 export { PreAuthEngine } from "./preauth.js";
 export type { PreAuthPolicy, PreAuthCheckResult } from "./preauth.js";
+export { AbuseController, DEFAULT_ABUSE_CONFIG } from "./abuse.js";
+export type { AbuseControlConfig, AbuseCheckResult } from "./abuse.js";
