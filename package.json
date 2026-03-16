@@ -7,7 +7,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "skyfi-mcp": "dist/index.js"
+    "skyfi-mcp": "dist/stdio.js"
   },
   "scripts": {
     "build": "tsup",
