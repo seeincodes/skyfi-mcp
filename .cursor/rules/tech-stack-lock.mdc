@@ -1,0 +1,57 @@
+---
+description: Enforce the locked technology stack decisions from Pre-Search
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Locked Technology Stack
+
+These technology decisions are final. Do not switch to alternatives without explicit user approval.
+
+## Server Language & Runtime
+- **LOCKED:** TypeScript 5.x on Node.js 20 LTS (local) / Cloudflare Workers (remote)
+- **DO NOT** switch to Python, Go, Rust, or any other language for the MCP server
+- **DO NOT** switch to Deno or Bun as primary runtime
+- The demo agent IS Python (Google ADK) — that is a separate concern
+
+## MCP SDK
+- **LOCKED:** @modelcontextprotocol/sdk (official TypeScript SDK)
+- **DO NOT** use community MCP libraries or roll a custom protocol implementation
+
+## HTTP Framework
+- **LOCKED:** Hono 4.x
+- **DO NOT** switch to Express, Fastify, Koa, or other HTTP frameworks
+- Hono was chosen for Cloudflare Workers native compatibility
+
+## Validation
+- **LOCKED:** Zod 3.x for input validation and JSON Schema derivation
+- **DO NOT** switch to ajv, joi, yup, or io-ts
+- Zod schemas are the single source of truth for both validation and MCP inputSchema
+
+## Testing
+- **LOCKED:** Vitest
+- **DO NOT** switch to Jest, Mocha, or other test runners
+
+## Build
+- **LOCKED:** tsup for TypeScript bundling
+- **DO NOT** switch to esbuild directly, webpack, or rollup
+
+## Deployment
+- **LOCKED:** Cloudflare Workers (primary remote) + Docker (self-hosted option)
+- **DO NOT** switch to AWS Lambda, Vercel Functions, or other serverless platforms as primary
+- Docker is the self-hosted escape hatch, not the primary deployment
+
+## Geocoding
+- **LOCKED:** Nominatim (OSM) for geocoding
+- **DO NOT** switch to Google Maps Geocoding, Mapbox, or other commercial providers as default
+- Commercial fallback may be documented but Nominatim is the default
+
+## Observability
+- **LOCKED:** Cloudflare Analytics + Logpush (cloud), Prometheus + Grafana (self-hosted)
+- **DO NOT** add Datadog, New Relic, or other commercial APM as default
+
+## Adding New Dependencies
+- New dependencies must be justified in a PR description
+- Prefer dependencies that work on both Node.js and Cloudflare Workers
+- Check Workers compatibility before adding any Node.js-specific package
+- Keep the dependency count minimal — this is infrastructure, not an application

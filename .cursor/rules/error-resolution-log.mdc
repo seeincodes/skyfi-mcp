@@ -1,0 +1,44 @@
+---
+description: Log errors and fixes to docs/ERROR_FIX_LOG.md when resolving issues
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Error Resolution Logging
+
+## When to Log
+
+Log to `docs/ERROR_FIX_LOG.md` when resolving:
+
+- **BUILD** — TypeScript compilation failures, tsup bundling errors
+- **MCP** — MCP SDK protocol errors, tool registration failures
+- **SKYFI** — SkyFi API integration errors (auth, rate limits, unexpected responses)
+- **OSM** — Nominatim geocoding failures, rate limit issues
+- **TRANSPORT** — STDIO or HTTP+SSE transport errors
+- **AUTH** — Authentication failures, credential validation issues
+- **VALIDATION** — Input validation edge cases, AOI guardrail issues
+- **ENVELOPE** — Response envelope schema violations
+- **WORKERS** — Cloudflare Workers deployment or runtime errors
+- **TEST** — Test infrastructure failures, CI pipeline issues
+- **WEBHOOK** — Webhook delivery failures, event queue issues
+- **DOCKER** — Container build or runtime errors
+- Any error that takes > 5 minutes to diagnose
+
+## When NOT to Log
+
+- Typos or syntax errors caught immediately
+- Linter warnings resolved by auto-fix
+- Expected test failures during TDD red phase
+- Temporary errors during active development (e.g., missing import while writing new code)
+
+## Log Format
+
+```
+### [YYYY-MM-DD] — [CATEGORY] — Brief description
+
+**Error:** Error message or behavior
+**Context:** What was being done
+**Root Cause:** Why it happened
+**Fix:** What was changed
+**Prevention:** How to prevent recurrence
+```

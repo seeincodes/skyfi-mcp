@@ -1,0 +1,44 @@
+# Environment
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.wrangler/
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+
+# Python (demo agent)
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Docker
+.docker/
+
+# Scaffold docs
+docs/
+
+# Logs
+*.log

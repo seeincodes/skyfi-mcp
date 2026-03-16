@@ -1,0 +1,35 @@
+---
+description: Protect environment files from accidental modification or exposure
+globs: [".env", ".env.*", ".env.local", ".env.production"]
+alwaysApply: true
+---
+
+# Environment File Protection
+
+## Rules
+
+1. **Never modify .env files without explicit user confirmation**
+2. **Never commit .env files to git** — they are in .gitignore
+3. **Never display API key values** in output, logs, or error messages
+4. **Never hardcode secrets** in source code — always reference env vars
+5. **Never log environment variables** at runtime (even at DEBUG level)
+
+## Required Environment Variables
+
+```
+SKYFI_API_KEY=                    # SkyFi platform API key
+SKYFI_API_BASE_URL=               # SkyFi API base URL
+SKYFI_API_VERSION=                # Pinned API version
+SKYFI_SIMULATE=                   # Simulation mode toggle
+PORT=                             # HTTP server port
+RATE_LIMIT_PER_MIN=               # Per-key rate limit
+LOG_LEVEL=                        # Logging level
+```
+
+## Adding New Environment Variables
+
+1. Add the variable to `.env` (local, not committed)
+2. Add the variable with empty value to `.env.example` (committed)
+3. Add the variable to `docs/TECH_STACK.md` Environment Variables section
+4. Add validation in the config loader (fail fast on missing required vars)
+5. Document the variable's purpose and default value
