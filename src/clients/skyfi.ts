@@ -52,11 +52,14 @@ export class SkyFiClient {
       "X-API-Version": this.apiVersion,
     };
 
-    const response = await fetch(url.toString(), {
+    const fetchInit: RequestInit = {
       method: options.method ?? "GET",
       headers,
-      ...(options.body && { body: JSON.stringify(options.body) }),
-    });
+    };
+    if (options.body) {
+      fetchInit.body = JSON.stringify(options.body);
+    }
+    const response = await fetch(url.toString(), fetchInit);
 
     if (response.status === 401) {
       throw new SkyFiApiError(
