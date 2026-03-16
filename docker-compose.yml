@@ -1,0 +1,22 @@
+services:
+  skyfi-mcp:
+    build: .
+    ports:
+      - "${PORT:-8787}:8787"
+    environment:
+      - PORT=8787
+      - SKYFI_API_BASE_URL=${SKYFI_API_BASE_URL:-https://app.skyfi.com/platform-api}
+      - SKYFI_API_VERSION=${SKYFI_API_VERSION:-2026-03}
+      - SKYFI_SIMULATE=${SKYFI_SIMULATE:-false}
+      - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-100}
+      - BURST_LIMIT=${BURST_LIMIT:-20}
+      - DAILY_ORDER_CAP=${DAILY_ORDER_CAP:-10}
+      - DAILY_SPEND_CAP_USD=${DAILY_SPEND_CAP_USD:-10000}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
