@@ -57,7 +57,7 @@ describe("MCP Server integration", () => {
     expect(names).toContain("get_order_status");
     expect(names).toContain("list_orders");
     expect(names).toContain("fetch_order_image");
-    expect(tools.length).toBe(15);
+    expect(tools.length).toBe(18);
   });
 
   it("each tool has a description", async () => {

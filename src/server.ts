@@ -44,6 +44,14 @@ import {
   listOrdersSchema,
   fetchOrderImageSchema,
 } from "./tools/history.js";
+import {
+  handleSetupAoiMonitoring,
+  handleCreateWebhookSubscription,
+  handleGetNotificationStatus,
+  setupAoiMonitoringSchema,
+  createWebhookSubscriptionSchema,
+  getNotificationStatusSchema,
+} from "./tools/monitoring.js";
 
 export function createServer(config: SkyFiConfig): McpServer {
   const server = new McpServer({
@@ -218,6 +226,39 @@ export function createServer(config: SkyFiConfig): McpServer {
     inputSchema: fetchOrderImageSchema.shape,
   }, async (args) => {
     const result = await handleFetchOrderImage(args as z.infer<typeof fetchOrderImageSchema>, skyfi);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  });
+
+  // --- Monitoring & Webhook Tools ---
+
+  server.registerTool("setup_aoi_monitoring", {
+    description:
+      "Configure recurring monitoring of an AOI for new imagery. Set sensor preferences, " +
+      "resolution requirements, and notification frequency. Use this when the user wants to " +
+      "be alerted when new imagery becomes available over a specific area.",
+    inputSchema: setupAoiMonitoringSchema.shape,
+  }, async (args) => {
+    const result = await handleSetupAoiMonitoring(args as z.infer<typeof setupAoiMonitoringSchema>, skyfi);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  });
+
+  server.registerTool("create_webhook_subscription", {
+    description:
+      "Register a webhook endpoint to receive push notifications when new imagery matching " +
+      "a monitoring rule is available. Requires an active monitor_id from setup_aoi_monitoring.",
+    inputSchema: createWebhookSubscriptionSchema.shape,
+  }, async (args) => {
+    const result = await handleCreateWebhookSubscription(args as z.infer<typeof createWebhookSubscriptionSchema>, skyfi);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  });
+
+  server.registerTool("get_notification_status", {
+    description:
+      "Check delivery history and status for webhook subscriptions. Use this to verify " +
+      "notifications are being delivered or to diagnose delivery failures.",
+    inputSchema: getNotificationStatusSchema.shape,
+  }, async (args) => {
+    const result = await handleGetNotificationStatus(args as z.infer<typeof getNotificationStatusSchema>, skyfi);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
 
