@@ -6,3 +6,5 @@ export { checkPricing, DEFAULT_PRICING_LIMITS } from "./pricing.js";
 export type { PricingLimits, PricingCheckResult } from "./pricing.js";
 export { QuoteStore } from "./quote-store.js";
 export { FeasibilityStore } from "./feasibility-store.js";
+export { RateLimiter, DEFAULT_RATE_LIMIT_CONFIG } from "./rate-limiter.js";
+export type { RateLimitConfig, RateLimitResult } from "./rate-limiter.js";
