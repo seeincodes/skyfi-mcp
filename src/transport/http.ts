@@ -2,8 +2,9 @@ import { createServer as createHttpServer, type IncomingMessage, type ServerResp
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { extractAndValidateApiKey } from "../auth/header.js";
 import { TokenStore } from "../auth/token-store.js";
-import { createServer as createMcpServer } from "../server.js";
+import { createServer as createMcpServer, type TokenManagement } from "../server.js";
 import type { SkyFiConfig } from "../types/config.js";
+import { hmacHash } from "../auth/crypto.js";
 
 const MCP_PATH = "/mcp";
 
@@ -60,7 +61,16 @@ export function startHttpTransport(options: HttpTransportOptions): ReturnType<ty
           }));
           return;
         }
-        const mcpServer = createMcpServer(makeConfig(resolution.apiKey!));
+        const tokenMgmt: TokenManagement = {
+          issueServiceToken: (name, scopes, budgetLimitUsd) =>
+            Promise.resolve(store.issueServiceToken(resolution.apiKey!, name, scopes, budgetLimitUsd)),
+          listServiceTokens: () =>
+            Promise.resolve(store.listServiceTokens(resolution.apiKeyHash!)),
+          revoke: (token) => Promise.resolve(store.revoke(token)),
+          revokeByName: (name) => Promise.resolve(store.revokeByName(resolution.apiKeyHash!, name)),
+          isSession: resolution.tokenType === "session",
+        };
+        const mcpServer = createMcpServer(makeConfig(resolution.apiKey!), tokenMgmt);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await mcpServer.server.connect(transport);
         await transport.handleRequest(req, res);
@@ -78,8 +88,18 @@ export function startHttpTransport(options: HttpTransportOptions): ReturnType<ty
           }));
           return;
         }
-        const sessionToken = store.issueSessionToken(authResult.config!.api_key);
-        const mcpServer = createMcpServer(authResult.config!);
+        const apiKey = authResult.config!.api_key;
+        const sessionToken = store.issueSessionToken(apiKey);
+        const apiKeyHash = hmacHash(apiKey, options.serverSecret ?? "dev-secret-change-in-production");
+        const tokenMgmt: TokenManagement = {
+          issueServiceToken: (name, scopes, budgetLimitUsd) =>
+            Promise.resolve(store.issueServiceToken(apiKey, name, scopes, budgetLimitUsd)),
+          listServiceTokens: () => Promise.resolve(store.listServiceTokens(apiKeyHash)),
+          revoke: (token) => Promise.resolve(store.revoke(token)),
+          revokeByName: (name) => Promise.resolve(store.revokeByName(apiKeyHash, name)),
+          isSession: true,
+        };
+        const mcpServer = createMcpServer(authResult.config!, tokenMgmt);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await mcpServer.server.connect(transport);
         res.setHeader("X-MCP-Token", sessionToken);

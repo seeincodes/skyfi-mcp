@@ -53,7 +53,29 @@ import {
   getNotificationStatusSchema,
 } from "./tools/monitoring.js";
 
-export function createServer(config: SkyFiConfig): McpServer {
+export interface TokenManagement {
+  issueServiceToken: (
+    name: string,
+    scopes: string[] | null,
+    budgetLimitUsd: number | null,
+  ) => Promise<{ token: string } | { error: string }>;
+  listServiceTokens: () => Promise<
+    Array<{
+      token: string;
+      name: string;
+      scopes: string[] | null;
+      budgetLimitUsd: number | null;
+      budgetSpentUsd: number;
+      createdAt: number;
+      absoluteExpiresAt: number;
+    }>
+  >;
+  revoke: (token: string) => Promise<boolean>;
+  revokeByName: (name: string) => Promise<boolean>;
+  isSession: boolean;
+}
+
+export function createServer(config: SkyFiConfig, tokenMgmt?: TokenManagement): McpServer {
   const server = new McpServer({
     name: "skyfi-mcp",
     version: VERSION,
@@ -261,6 +283,134 @@ export function createServer(config: SkyFiConfig): McpServer {
     const result = await handleGetNotificationStatus(args as z.infer<typeof getNotificationStatusSchema>, skyfi);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
+
+  // --- Token Management Tools (only available when token context is provided) ---
+
+  if (tokenMgmt) {
+    server.registerTool("create_service_token", {
+      description:
+        "Create a long-lived service token for automated pipelines (e.g. nightly monitoring, scheduled orders). " +
+        "Service tokens have no idle expiry and last 90 days. Optionally scope to specific tools and set a budget cap. " +
+        "Requires an active session token (not another service token). " +
+        "Store the returned token securely — it cannot be retrieved again.",
+      inputSchema: {
+        name: z.string().min(1).max(64).describe("Unique name for this service token, e.g. 'nightly-monitor'"),
+        scopes: z.array(z.string()).optional().describe(
+          "Tool names this token is allowed to call. Omit for full access.",
+        ),
+        budget_limit_usd: z.number().positive().optional().describe(
+          "Optional spend cap in USD. Requests exceeding this will be rejected.",
+        ),
+      },
+    }, async (args) => {
+      if (!tokenMgmt.isSession) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              status: "error",
+              error: {
+                code: "SCOPE_DENIED",
+                message: "create_service_token requires a session token, not a service token.",
+                recoverable: false,
+              },
+            }),
+          }],
+          isError: true,
+        };
+      }
+      const result = await tokenMgmt.issueServiceToken(
+        args.name,
+        args.scopes ?? null,
+        args.budget_limit_usd ?? null,
+      );
+      if ("error" in result) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ status: "error", error: { code: "CONFLICT", message: result.error, recoverable: false } }) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: "success",
+            tool: "create_service_token",
+            data: {
+              token: result.token,
+              name: args.name,
+              scopes: args.scopes ?? null,
+              budget_limit_usd: args.budget_limit_usd ?? null,
+              expires_in_days: 90,
+              note: "Store this token securely. Use it as X-MCP-Token for automated pipeline requests.",
+            },
+          }),
+        }],
+      };
+    });
+
+    server.registerTool("list_service_tokens", {
+      description:
+        "List all active service tokens associated with your API key. " +
+        "Shows token names, scopes, budget usage, and expiry. Does not reveal the token strings.",
+      inputSchema: {},
+    }, async () => {
+      const tokens = await tokenMgmt.listServiceTokens();
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: "success",
+            tool: "list_service_tokens",
+            data: {
+              count: tokens.length,
+              tokens: tokens.map((t) => ({
+                name: t.name,
+                token_prefix: t.token.slice(0, 16) + "...",
+                scopes: t.scopes,
+                budget_limit_usd: t.budgetLimitUsd,
+                budget_spent_usd: t.budgetSpentUsd,
+                created_at: new Date(t.createdAt).toISOString(),
+                expires_at: new Date(t.absoluteExpiresAt).toISOString(),
+              })),
+            },
+          }),
+        }],
+      };
+    });
+
+    server.registerTool("revoke_service_token", {
+      description:
+        "Revoke a service token by its name or token string. " +
+        "Revoked tokens are immediately invalid and cannot be recovered.",
+      inputSchema: {
+        identifier: z.string().min(1).describe(
+          "The service token name (e.g. 'nightly-monitor') or full token string (mcp_svc_...).",
+        ),
+      },
+    }, async (args) => {
+      const { identifier } = args;
+      let revoked: boolean;
+      if (identifier.startsWith("mcp_svc_")) {
+        revoked = await tokenMgmt.revoke(identifier);
+      } else {
+        revoked = await tokenMgmt.revokeByName(identifier);
+      }
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: revoked ? "success" : "error",
+            tool: "revoke_service_token",
+            data: revoked
+              ? { message: `Service token '${identifier}' has been revoked.` }
+              : { message: `No active service token found matching '${identifier}'.` },
+          }),
+        }],
+        isError: !revoked,
+      };
+    });
+  }
 
   return server;
 }

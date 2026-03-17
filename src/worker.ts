@@ -2,7 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { extractAndValidateApiKey } from "./auth/header.js";
 import { KVTokenStore } from "./auth/kv-token-store.js";
 import { TokenStore } from "./auth/token-store.js";
-import { createServer } from "./server.js";
+import { createServer, type TokenManagement } from "./server.js";
 
 interface Env {
   SKYFI_API_BASE_URL?: string;
@@ -10,6 +10,26 @@ interface Env {
   SKYFI_SIMULATE?: string;
   TOKEN_ENCRYPTION_SECRET?: string;
   SKYFI_TOKENS?: KVNamespace;
+}
+
+function buildTokenMgmt(
+  store: KVTokenStore | TokenStore,
+  apiKey: string,
+  apiKeyHash: string,
+  currentToken: string,
+  isSession: boolean,
+): TokenManagement {
+  return {
+    issueServiceToken: (name, scopes, budgetLimitUsd) =>
+      Promise.resolve(store.issueServiceToken(apiKey, name, scopes, budgetLimitUsd)),
+    listServiceTokens: () =>
+      Promise.resolve(store.listServiceTokens(apiKeyHash)),
+    revoke: (token) =>
+      Promise.resolve(store.revoke(token)),
+    revokeByName: (name) =>
+      Promise.resolve(store.revokeByName(apiKeyHash, name)),
+    isSession,
+  };
 }
 
 function getStore(env: Env): KVTokenStore | TokenStore {
@@ -65,12 +85,19 @@ export default {
           );
         }
 
+        const tokenMgmt = buildTokenMgmt(
+          store,
+          resolution.apiKey!,
+          resolution.apiKeyHash!,
+          mcpToken,
+          resolution.tokenType === "session",
+        );
         const mcpServer = createServer({
           api_key: resolution.apiKey!,
           api_base_url: defaults.api_base_url ?? "https://app.skyfi.com/platform-api",
           api_version: defaults.api_version ?? "2026-03",
           simulate: defaults.simulate ?? false,
-        });
+        }, tokenMgmt);
 
         const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
@@ -93,8 +120,12 @@ export default {
         }
 
         const sessionToken = await store.issueSessionToken(authResult.config!.api_key);
+        const { hmacHash } = await import("./auth/crypto.js");
+        const secret = (env as Env & { TOKEN_ENCRYPTION_SECRET?: string }).TOKEN_ENCRYPTION_SECRET ?? "dev-secret-change-in-production";
+        const apiKeyHash = hmacHash(authResult.config!.api_key, secret);
+        const tokenMgmt = buildTokenMgmt(store, authResult.config!.api_key, apiKeyHash, sessionToken, true);
 
-        const mcpServer = createServer(authResult.config!);
+        const mcpServer = createServer(authResult.config!, tokenMgmt);
         const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });

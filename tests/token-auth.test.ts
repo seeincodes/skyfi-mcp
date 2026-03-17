@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { encrypt, decrypt, hmacHash, generateToken } from "../src/auth/crypto.js";
 import { TokenStore } from "../src/auth/token-store.js";
 import { UsageLogger } from "../src/observability/usage-logger.js";
+import { createServer, type TokenManagement } from "../src/server.js";
 
 const TEST_SECRET = "test-server-secret-32-chars-ok!";
 
@@ -399,5 +400,84 @@ describe("UsageLogger", () => {
     expect(funnel.estimates).toBe(1);
     expect(funnel.quotes).toBe(1);
     expect(funnel.executes).toBe(1);
+  });
+});
+
+// --- Service Token MCP Tools ---
+
+describe("Service token MCP tools", () => {
+  const SVC_SECRET = "test-secret-32chars-padded-here!!";
+
+  function makeTokenMgmt(store: TokenStore, apiKey: string, isSession: boolean): TokenManagement {
+    const keyHash = hmacHash(apiKey, SVC_SECRET);
+    return {
+      issueServiceToken: (name, scopes, budgetLimitUsd) =>
+        Promise.resolve(store.issueServiceToken(apiKey, name, scopes, budgetLimitUsd)),
+      listServiceTokens: () => Promise.resolve(store.listServiceTokens(keyHash)),
+      revoke: (token) => Promise.resolve(store.revoke(token)),
+      revokeByName: (name) => Promise.resolve(store.revokeByName(keyHash, name)),
+      isSession,
+    };
+  }
+
+  async function makeClient(apiKey: string, mgmt?: TokenManagement) {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const server = createServer(
+      { api_key: apiKey, api_base_url: "https://app.skyfi.com/platform-api", api_version: "2026-03", simulate: true },
+      mgmt,
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "1.0" });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    return client;
+  }
+
+  it("token tools are registered when tokenMgmt is provided", async () => {
+    const store = new TokenStore(SVC_SECRET);
+    const apiKey = "sk_test_service_tool_12345678";
+    const client = await makeClient(apiKey, makeTokenMgmt(store, apiKey, true));
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).toContain("create_service_token");
+    expect(names).toContain("list_service_tokens");
+    expect(names).toContain("revoke_service_token");
+  });
+
+  it("token tools are absent when no tokenMgmt provided", async () => {
+    const client = await makeClient("sk_test_no_mgmt_12345678");
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain("create_service_token");
+    expect(names).not.toContain("list_service_tokens");
+    expect(names).not.toContain("revoke_service_token");
+  });
+
+  it("list_service_tokens returns empty list initially", async () => {
+    const store = new TokenStore(SVC_SECRET);
+    const apiKey = "sk_test_list_tools_12345678";
+    const client = await makeClient(apiKey, makeTokenMgmt(store, apiKey, true));
+    const result = await client.callTool({ name: "list_service_tokens", arguments: {} });
+    const text = JSON.parse((result.content[0] as { text: string }).text);
+    expect(text.data.count).toBe(0);
+  });
+
+  it("create_service_token is blocked with service token (not session)", async () => {
+    const store = new TokenStore(SVC_SECRET);
+    const apiKey = "sk_test_svc_block_12345678";
+    const client = await makeClient(apiKey, makeTokenMgmt(store, apiKey, false));
+    const result = await client.callTool({ name: "create_service_token", arguments: { name: "test" } });
+    const text = JSON.parse((result.content[0] as { text: string }).text);
+    expect(text.error.code).toBe("SCOPE_DENIED");
+  });
+
+  it("revoke_service_token returns error for unknown identifier", async () => {
+    const store = new TokenStore(SVC_SECRET);
+    const apiKey = "sk_test_revoke_tools_12345678";
+    const client = await makeClient(apiKey, makeTokenMgmt(store, apiKey, true));
+    const result = await client.callTool({ name: "revoke_service_token", arguments: { identifier: "nonexistent" } });
+    const text = JSON.parse((result.content[0] as { text: string }).text);
+    expect(text.status).toBe("error");
   });
 });
