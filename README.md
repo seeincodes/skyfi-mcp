@@ -1,5 +1,8 @@
 # SkyFi MCP Server
 
+[![npm version](https://img.shields.io/npm/v/skyfi-mcp.svg)](https://www.npmjs.com/package/skyfi-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/skyfi-mcp.svg)](https://www.npmjs.com/package/skyfi-mcp)
+
 Official [Model Context Protocol](https://modelcontextprotocol.io) server for the [SkyFi](https://skyfi.com) satellite imagery platform. Enables any AI agent to search, price, order, and monitor satellite imagery through conversational tool calls.
 
 ## Quick Start (< 10 minutes)
@@ -7,7 +10,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for th
 ### 1. Install
 
 ```bash
-npm install skyfi-mcp
+npm install skyfi-mcp@0.1.0
 ```
 
 ### 2. Configure
