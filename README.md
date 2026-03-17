@@ -49,6 +49,13 @@ npx skyfi-mcp
 }
 ```
 
+**Claude.ai (remote MCP — no install needed):**
+
+1. Open [Claude.ai](https://claude.ai) → Settings → Integrations → Add MCP Server
+2. Enter the server URL: `https://skyfi-mcp.skyfi-xian.workers.dev/mcp`
+3. Add your SkyFi API key as a custom header: `X-SkyFi-API-Key: sk_your_key`
+4. Save — Claude will automatically exchange your key for a session token
+
 **Remote (any framework):**
 
 ```
