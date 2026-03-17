@@ -108,40 +108,22 @@ describe("MCP Server integration", () => {
       text: () => Promise.resolve("{}"),
     });
 
-    const quoteMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-      json: () =>
-        Promise.resolve({
-          quote_id: "q_test",
-          expires_at: "2026-03-16T12:15:00Z",
-          price_usd: 45,
-          summary: "Test order",
-        }),
-      text: () => Promise.resolve("{}"),
-    });
-
     const executeMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       headers: new Headers(),
       json: () =>
         Promise.resolve({
-          order_id: "ord_test",
-          status: "pending",
-          price_usd: 45,
-          estimated_delivery: "2026-03-17T00:00:00Z",
+          orderId: "ord_test",
+          status: "PENDING",
+          totalPrice: 45,
         }),
       text: () => Promise.resolve("{}"),
     });
 
-    let callCount = 0;
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes("nominatim")) return geocodeMock();
-      callCount++;
-      if (callCount === 1) return searchMock();
-      if (callCount === 2) return quoteMock();
+      if (url.includes("/archives")) return searchMock();
       return executeMock();
     });
 
@@ -174,11 +156,11 @@ describe("MCP Server integration", () => {
     const searchData = JSON.parse((searchResult.content as { type: string; text: string }[])[0].text);
     expect(searchData.status).toBe("success");
 
-    // Step 3: Quote
+    // Step 3: Quote (client-side, no API call)
     const quoteResult = await client.callTool({
       name: "quote_archive_order",
       arguments: {
-        scene_id: "s_1",
+        archive_id: "arch_s_1",
         aoi: {
           type: "Polygon",
           coordinates: [
@@ -191,23 +173,38 @@ describe("MCP Server integration", () => {
             ],
           ],
         },
+        price_per_sqkm_usd: 10.0,
+        price_full_scene_usd: 500.0,
+        overlap_sqkm: 4.5,
       },
     });
     const quoteData = JSON.parse((quoteResult.content as { type: string; text: string }[])[0].text);
     expect(quoteData.status).toBe("success");
-    expect(quoteData.data.quote_id).toBe("q_test");
+    expect(quoteData.data.archive_id).toBe("arch_s_1");
+    expect(quoteData.data.estimated_price_usd).toBeCloseTo(45.0);
 
     // Step 4: Execute with confirmation
     const executeResult = await client.callTool({
       name: "execute_archive_order",
       arguments: {
-        quote_id: "q_test",
+        archive_id: "arch_s_1",
+        aoi: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [4.4, 51.85],
+              [4.6, 51.85],
+              [4.6, 51.95],
+              [4.4, 51.95],
+              [4.4, 51.85],
+            ],
+          ],
+        },
         user_confirmed: true,
-        idempotency_key: "test-key-123",
       },
     });
     const executeData = JSON.parse((executeResult.content as { type: string; text: string }[])[0].text);
     expect(executeData.status).toBe("success");
-    expect(executeData.data.order_id).toBe("ord_test");
+    expect(executeData.data.orderId).toBe("ord_test");
   });
 });

@@ -42,15 +42,8 @@ export async function handleGetOrderStatus(
 ): Promise<ToolResponse> {
   const startTime = Date.now();
   try {
-    const response = await client.request<{
-      order_id: string;
-      status: string;
-      progress_pct: number;
-      created_at: string;
-      updated_at: string;
-      estimated_delivery: string;
-    }>({
-      path: `/v1/orders/${encodeURIComponent(args.order_id)}`,
+    const response = await client.request<Record<string, unknown>>({
+      path: `/orders/${encodeURIComponent(args.order_id)}`,
     });
     return success({
       tool: "get_order_status",
@@ -70,20 +63,14 @@ export async function handleListOrders(
   const startTime = Date.now();
   try {
     const params: Record<string, string> = {};
-    if (args.date_range) {
-      params.start_date = args.date_range.start;
-      params.end_date = args.date_range.end;
-    }
+    params.page_number = String((args.page ?? 1) - 1); // API is 0-indexed
+    params.page_size = String(args.limit ?? 20);
     if (args.status) params.status = args.status;
-    params.page = String(args.page ?? 1);
-    params.limit = String(args.limit ?? 20);
+    if (args.date_range?.start) params.start_date = args.date_range.start;
+    if (args.date_range?.end) params.end_date = args.date_range.end;
 
-    const response = await client.request<{
-      orders: unknown[];
-      total: number;
-      page: number;
-    }>({
-      path: "/v1/orders",
+    const response = await client.request<Record<string, unknown>>({
+      path: "/orders",
       params,
     });
     return success({
@@ -103,14 +90,8 @@ export async function handleFetchOrderImage(
 ): Promise<ToolResponse> {
   const startTime = Date.now();
   try {
-    const response = await client.request<{
-      order_id: string;
-      download_url: string;
-      file_size_bytes: number;
-      format: string;
-      expires_at: string;
-    }>({
-      path: `/v1/orders/${encodeURIComponent(args.order_id)}/image`,
+    const response = await client.request<Record<string, unknown>>({
+      path: `/orders/${encodeURIComponent(args.order_id)}/DOWNLOAD`,
     });
     return success({
       tool: "fetch_order_image",

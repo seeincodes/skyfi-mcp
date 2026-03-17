@@ -48,8 +48,7 @@ export class SkyFiClient {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-API-Key": this.apiKey,
-      "X-API-Version": this.apiVersion,
+      "X-Skyfi-Api-Key": this.apiKey,
     };
 
     const fetchInit: RequestInit = {

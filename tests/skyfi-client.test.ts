@@ -39,8 +39,7 @@ describe("SkyFiClient", () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
     const [url, options] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://api.skyfi.test/v1/search");
-    expect(options.headers["X-API-Key"]).toBe("sk_test_123");
-    expect(options.headers["X-API-Version"]).toBe("2026-03");
+    expect(options.headers["X-Skyfi-Api-Key"]).toBe("sk_test_123");
   });
 
   it("exposes the pinned API version", () => {

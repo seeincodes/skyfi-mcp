@@ -137,6 +137,8 @@ The `execute_*` tools cannot be called without all three fields. This is enforce
 | Claude Code | STDIO / HTTP+SSE | [docs/integrations/claude-code.md](docs/integrations/claude-code.md) |
 | Gemini | HTTP+SSE | [docs/integrations/gemini.md](docs/integrations/gemini.md) |
 
+Compatibility matrix and transport expectations: [docs/integrations/COMPATIBILITY.md](docs/integrations/COMPATIBILITY.md)
+
 ## Simulation Mode
 
 Test the full order flow without placing real orders:
@@ -172,7 +174,7 @@ docker compose up
 ```bash
 npm install
 npm run build        # Build with tsup
-npm test             # Run 239 tests
+npm test             # Run test suite
 npm run typecheck    # TypeScript check
 npm run lint         # ESLint
 ```

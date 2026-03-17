@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SkyFiClient, SkyFiApiError } from "../clients/skyfi.js";
 import { success, error, makeError } from "../envelope/index.js";
-import { validateAoi } from "../guardrails/aoi.js";
+import { validateAoi, polygonToWkt } from "../guardrails/aoi.js";
 import { sanitizeString } from "../guardrails/sanitize.js";
 import type { ToolResponse } from "../types/response.js";
 
@@ -103,19 +103,18 @@ export async function handleSearchArchive(
 
   try {
     const response = await client.request<{
-      results: unknown[];
-      total: number;
-      page: number;
+      archives: unknown[];
+      nextPage: string | null;
+      total: number | null;
     }>({
       method: "POST",
-      path: "/v1/archive/search",
+      path: "/archives",
       body: {
-        aoi: args.aoi,
-        date_range: args.date_range,
-        resolution_tier: args.resolution_tier,
-        sensor_type: args.sensor_type,
-        page: args.page ?? 1,
-        limit: args.limit ?? 20,
+        aoi: polygonToWkt(args.aoi as GeoJSON.Polygon),
+        fromDate: args.date_range?.start ? `${args.date_range.start}T00:00:00` : undefined,
+        toDate: args.date_range?.end ? `${args.date_range.end}T23:59:59` : undefined,
+        resolutions: args.resolution_tier ? [args.resolution_tier.toUpperCase().replace("_", " ")] : undefined,
+        pageSize: args.limit ?? 20,
       },
     });
     return success({
@@ -150,11 +149,16 @@ export async function handleExploreOpenData(
     params.limit = String(args.limit ?? 20);
 
     const response = await client.request<{
-      datasets: unknown[];
-      total: number;
+      archives: unknown[];
+      nextPage: string | null;
     }>({
-      path: "/v1/open-data",
-      params,
+      method: "POST",
+      path: "/archives",
+      body: {
+        openData: true,
+        ...(args.provider ? { providers: [args.provider] } : {}),
+        pageSize: args.limit ?? 20,
+      },
     });
     return success({
       tool: "explore_open_data",
@@ -179,17 +183,11 @@ export async function handleEstimateArchivePrice(
   }
 
   try {
-    const response = await client.request<{
-      price_usd: number;
-      area_km2: number;
-      resolution_tier: string;
-    }>({
+    const response = await client.request<Record<string, unknown>>({
       method: "POST",
-      path: "/v1/archive/estimate",
+      path: "/pricing",
       body: {
-        scene_id: args.scene_id,
-        aoi: args.aoi,
-        resolution_tier: args.resolution_tier,
+        aoi: polygonToWkt(args.aoi as GeoJSON.Polygon),
       },
     });
     return success({
@@ -215,17 +213,11 @@ export async function handleEstimateTaskingCost(
   }
 
   try {
-    const response = await client.request<{
-      estimated_cost_usd: number;
-      area_km2: number;
-      sensor_type: string;
-    }>({
+    const response = await client.request<Record<string, unknown>>({
       method: "POST",
-      path: "/v1/tasking/estimate",
+      path: "/pricing",
       body: {
-        aoi: args.aoi,
-        sensor_type: args.sensor_type,
-        resolution_tier: args.resolution_tier,
+        aoi: polygonToWkt(args.aoi as GeoJSON.Polygon),
       },
     });
     return success({
@@ -251,19 +243,18 @@ export async function handleCheckCaptureFeasibility(
   }
 
   try {
-    const response = await client.request<{
-      feasible: boolean;
-      satellite_passes: unknown[];
-      cloud_cover_forecast: unknown;
-      next_available_window: string;
-      summary: string;
-    }>({
+    const response = await client.request<Record<string, unknown>>({
       method: "POST",
-      path: "/v1/tasking/feasibility",
+      path: "/feasibility",
       body: {
-        aoi: args.aoi,
-        sensor_type: args.sensor_type,
-        desired_date_range: args.desired_date_range,
+        aoi: polygonToWkt(args.aoi as GeoJSON.Polygon),
+        productType: args.sensor_type?.toUpperCase() ?? "DAY",
+        startDate: args.desired_date_range?.start
+          ? `${args.desired_date_range.start}T00:00:00+00:00`
+          : new Date().toISOString(),
+        endDate: args.desired_date_range?.end
+          ? `${args.desired_date_range.end}T23:59:59+00:00`
+          : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
       },
     });
     return success({

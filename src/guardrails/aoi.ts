@@ -1,5 +1,13 @@
 import { area as turfArea } from "@turf/turf";
 
+/** Convert a GeoJSON Polygon to WKT string (required by SkyFi API) */
+export function polygonToWkt(polygon: GeoJSON.Polygon): string {
+  const ring = polygon.coordinates[0]
+    .map(([lon, lat]) => `${lon} ${lat}`)
+    .join(",");
+  return `POLYGON((${ring}))`;
+}
+
 const KM2_PER_M2 = 1e-6;
 
 export interface AoiLimits {

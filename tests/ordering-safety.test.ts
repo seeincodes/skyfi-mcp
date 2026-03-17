@@ -122,51 +122,54 @@ describe("FeasibilityStore", () => {
 });
 
 describe("ordering safety invariants", () => {
-  it("execute_archive_order Zod schema rejects user_confirmed: false", async () => {
+  const SMALL_AOI = {
+    type: "Polygon" as const,
+    coordinates: [[[4.47, 51.92], [4.48, 51.92], [4.48, 51.93], [4.47, 51.93], [4.47, 51.92]]],
+  };
 
+  it("execute_archive_order Zod schema rejects user_confirmed: false", async () => {
     const result = executeArchiveOrderSchema.safeParse({
-      quote_id: "q_123",
+      archive_id: "arch_123",
+      aoi: SMALL_AOI,
       user_confirmed: false,
-      idempotency_key: "key-1",
     });
     expect(result.success).toBe(false);
   });
 
   it("execute_archive_order Zod schema rejects missing user_confirmed", async () => {
-
     const result = executeArchiveOrderSchema.safeParse({
-      quote_id: "q_123",
-      idempotency_key: "key-1",
+      archive_id: "arch_123",
+      aoi: SMALL_AOI,
     });
     expect(result.success).toBe(false);
   });
 
-  it("execute_archive_order Zod schema rejects missing idempotency_key", async () => {
-
+  it("execute_archive_order Zod schema rejects missing archive_id", async () => {
     const result = executeArchiveOrderSchema.safeParse({
-      quote_id: "q_123",
+      aoi: SMALL_AOI,
       user_confirmed: true,
     });
     expect(result.success).toBe(false);
   });
 
   it("execute_tasking_order Zod schema rejects user_confirmed: false", async () => {
-
     const result = executeTaskingOrderSchema.safeParse({
-      quote_id: "q_123",
+      aoi: SMALL_AOI,
+      product_type: "DAY",
+      resolution: "HIGH",
+      window_start: "2026-04-01T00:00:00+00:00",
+      window_end: "2026-04-30T23:59:59+00:00",
       user_confirmed: false,
-      idempotency_key: "key-1",
     });
     expect(result.success).toBe(false);
   });
 
   it("no schema allows bypassing via extra fields", async () => {
-
     // Extra fields should be stripped, not used
     const result = executeArchiveOrderSchema.safeParse({
-      quote_id: "q_123",
+      archive_id: "arch_123",
+      aoi: SMALL_AOI,
       user_confirmed: true,
-      idempotency_key: "key-1",
       skip_confirmation: true,
       admin_override: true,
     });
