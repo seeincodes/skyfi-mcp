@@ -7,3 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 SKYFI_API_BASE_URL = "https://app.skyfi.com/platform-api"
 SKYFI_API_VERSION = "2026-03"
 SKYFI_SIMULATE = "false"
+
+# Token store requires Workers KV
+# Create with: wrangler kv namespace create SKYFI_TOKENS
+[[kv_namespaces]]
+binding = "SKYFI_TOKENS"
+id = "" # Set after running wrangler kv namespace create

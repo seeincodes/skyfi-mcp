@@ -38,6 +38,8 @@ const SERVICE_MAX_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 export class TokenStore {
   private tokens = new Map<string, TokenData>();
+  // Index: apiKeyHash → set of service token strings (for list/revoke)
+  private serviceIndex = new Map<string, Set<string>>();
   private readonly secret: string;
 
   constructor(secret: string) {
@@ -64,13 +66,26 @@ export class TokenStore {
     name: string,
     scopes: string[] | null = null,
     budgetLimitUsd: number | null = null,
-  ): string {
+  ): { token: string } | { error: string } {
+    const keyHash = hmacHash(apiKey, this.secret);
+
+    // Enforce unique names per API key
+    const existingTokens = this.serviceIndex.get(keyHash);
+    if (existingTokens) {
+      for (const existingToken of existingTokens) {
+        const data = this.tokens.get(existingToken);
+        if (data?.type === "service" && data.name === name) {
+          return { error: `A service token named '${name}' already exists. Revoke it first or choose a different name.` };
+        }
+      }
+    }
+
     const token = generateToken("mcp_svc_");
     const now = Date.now();
     this.tokens.set(token, {
       type: "service",
       apiKeyEncrypted: encrypt(apiKey, this.secret),
-      apiKeyHash: hmacHash(apiKey, this.secret),
+      apiKeyHash: keyHash,
       name,
       scopes,
       budgetLimitUsd,
@@ -78,7 +93,14 @@ export class TokenStore {
       createdAt: now,
       absoluteExpiresAt: now + SERVICE_MAX_LIFETIME_MS,
     });
-    return token;
+
+    // Update index
+    if (!this.serviceIndex.has(keyHash)) {
+      this.serviceIndex.set(keyHash, new Set());
+    }
+    this.serviceIndex.get(keyHash)!.add(token);
+
+    return { token };
   }
 
   resolve(token: string): TokenResolution {
@@ -91,14 +113,14 @@ export class TokenStore {
 
     // Check absolute expiry
     if (now > data.absoluteExpiresAt) {
-      this.tokens.delete(token);
+      this.removeToken(token, data);
       return { valid: false, error: "Token has expired. Re-authenticate with your API key." };
     }
 
     // Session-specific: check idle expiry
     if (data.type === "session") {
       if (now > data.lastUsedAt + data.idleTtlMs) {
-        this.tokens.delete(token);
+        this.removeToken(token, data);
         return { valid: false, error: "Session expired due to inactivity. Re-authenticate with your API key." };
       }
       // Extend idle window
@@ -117,7 +139,7 @@ export class TokenStore {
   checkScope(token: string, toolName: string): { allowed: boolean; error?: string } {
     const data = this.tokens.get(token);
     if (!data || data.type !== "service") return { allowed: true };
-    if (!data.scopes) return { allowed: true }; // null = all scopes
+    if (!data.scopes) return { allowed: true };
     if (data.scopes.includes(toolName)) return { allowed: true };
     return {
       allowed: false,
@@ -125,6 +147,11 @@ export class TokenStore {
     };
   }
 
+  /**
+   * Check if a spend amount is within the service token's budget.
+   * NOTE: Budget enforcement is a soft limit under concurrent access (KV eventual consistency).
+   * Small overages are possible when multiple requests check simultaneously.
+   */
   checkBudget(token: string, amountUsd: number): { allowed: boolean; error?: string } {
     const data = this.tokens.get(token);
     if (!data || data.type !== "service") return { allowed: true };
@@ -155,6 +182,9 @@ export class TokenStore {
     createdAt: number;
     absoluteExpiresAt: number;
   }> {
+    const tokenSet = this.serviceIndex.get(apiKeyHash);
+    if (!tokenSet) return [];
+
     const results: Array<{
       token: string;
       name: string;
@@ -164,8 +194,10 @@ export class TokenStore {
       createdAt: number;
       absoluteExpiresAt: number;
     }> = [];
-    for (const [token, data] of this.tokens) {
-      if (data.type === "service" && data.apiKeyHash === apiKeyHash) {
+
+    for (const token of tokenSet) {
+      const data = this.tokens.get(token);
+      if (data?.type === "service") {
         results.push({
           token,
           name: data.name,
@@ -181,16 +213,39 @@ export class TokenStore {
   }
 
   revoke(token: string): boolean {
-    return this.tokens.delete(token);
+    const data = this.tokens.get(token);
+    if (!data) return false;
+    this.removeToken(token, data);
+    return true;
   }
 
   revokeByName(apiKeyHash: string, name: string): boolean {
-    for (const [token, data] of this.tokens) {
-      if (data.type === "service" && data.apiKeyHash === apiKeyHash && data.name === name) {
-        this.tokens.delete(token);
+    const tokenSet = this.serviceIndex.get(apiKeyHash);
+    if (!tokenSet) return false;
+    for (const token of tokenSet) {
+      const data = this.tokens.get(token);
+      if (data?.type === "service" && data.name === name) {
+        this.removeToken(token, data);
         return true;
       }
     }
     return false;
+  }
+
+  /** Check if a token is a session token (for gating create_service_token) */
+  isSessionToken(token: string): boolean {
+    const data = this.tokens.get(token);
+    return data?.type === "session" || false;
+  }
+
+  private removeToken(token: string, data: TokenData): void {
+    this.tokens.delete(token);
+    if (data.type === "service") {
+      const index = this.serviceIndex.get(data.apiKeyHash);
+      if (index) {
+        index.delete(token);
+        if (index.size === 0) this.serviceIndex.delete(data.apiKeyHash);
+      }
+    }
   }
 }

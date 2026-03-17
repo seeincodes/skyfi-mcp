@@ -5,6 +5,19 @@ import { UsageLogger } from "../src/observability/usage-logger.js";
 
 const TEST_SECRET = "test-server-secret-32-chars-ok!";
 
+/** Helper: unwrap issueServiceToken result, throw if error */
+function issueService(
+  store: TokenStore,
+  apiKey: string,
+  name: string,
+  scopes: string[] | null = null,
+  budgetLimitUsd: number | null = null,
+): string {
+  const result = store.issueServiceToken(apiKey, name, scopes, budgetLimitUsd);
+  if ("error" in result) throw new Error(result.error);
+  return result.token;
+}
+
 describe("crypto", () => {
   it("encrypts and decrypts round-trip", () => {
     const key = "sk_test_my_secret_api_key_12345";
@@ -140,7 +153,7 @@ describe("TokenStore — session tokens", () => {
 describe("TokenStore — service tokens", () => {
   it("issues and resolves a service token", () => {
     const store = new TokenStore(TEST_SECRET);
-    const token = store.issueServiceToken("sk_test_svc", "nightly-monitor");
+    const token = issueService(store,"sk_test_svc", "nightly-monitor");
     expect(token).toMatch(/^mcp_svc_/);
 
     const result = store.resolve(token);
@@ -151,7 +164,7 @@ describe("TokenStore — service tokens", () => {
 
   it("does not idle-expire", () => {
     const store = new TokenStore(TEST_SECRET);
-    const token = store.issueServiceToken("sk_test_no_idle", "pipeline");
+    const token = issueService(store,"sk_test_no_idle", "pipeline");
 
     vi.useFakeTimers();
     vi.advanceTimersByTime(30 * 24 * 60 * 60 * 1000); // 30 days idle
@@ -164,7 +177,7 @@ describe("TokenStore — service tokens", () => {
 
   it("expires after 90-day absolute lifetime", () => {
     const store = new TokenStore(TEST_SECRET);
-    const token = store.issueServiceToken("sk_test_90d", "batch");
+    const token = issueService(store,"sk_test_90d", "batch");
 
     vi.useFakeTimers();
     vi.advanceTimersByTime(91 * 24 * 60 * 60 * 1000); // 91 days
@@ -178,14 +191,14 @@ describe("TokenStore — service tokens", () => {
   describe("scope enforcement", () => {
     it("allows tools within scope", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "scoped", ["search_archive", "geocode"]);
+      const token = issueService(store,"sk_test", "scoped", ["search_archive", "geocode"]);
       expect(store.checkScope(token, "search_archive").allowed).toBe(true);
       expect(store.checkScope(token, "geocode").allowed).toBe(true);
     });
 
     it("denies tools outside scope", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "scoped", ["search_archive"]);
+      const token = issueService(store,"sk_test", "scoped", ["search_archive"]);
       const result = store.checkScope(token, "execute_archive_order");
       expect(result.allowed).toBe(false);
       expect(result.error).toContain("does not have scope");
@@ -193,7 +206,7 @@ describe("TokenStore — service tokens", () => {
 
     it("null scopes allows all tools", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "unscoped", null);
+      const token = issueService(store,"sk_test", "unscoped", null);
       expect(store.checkScope(token, "execute_archive_order").allowed).toBe(true);
     });
   });
@@ -201,13 +214,13 @@ describe("TokenStore — service tokens", () => {
   describe("budget enforcement", () => {
     it("allows spend within budget", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "budgeted", null, 500);
+      const token = issueService(store,"sk_test", "budgeted", null, 500);
       expect(store.checkBudget(token, 200).allowed).toBe(true);
     });
 
     it("rejects spend exceeding budget", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "budgeted", null, 500);
+      const token = issueService(store,"sk_test", "budgeted", null, 500);
       store.recordSpend(token, 400);
       const result = store.checkBudget(token, 200);
       expect(result.allowed).toBe(false);
@@ -216,7 +229,7 @@ describe("TokenStore — service tokens", () => {
 
     it("tracks cumulative spend", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "cumulative", null, 1000);
+      const token = issueService(store,"sk_test", "cumulative", null, 1000);
       store.recordSpend(token, 300);
       store.recordSpend(token, 300);
       expect(store.checkBudget(token, 300).allowed).toBe(true);
@@ -225,7 +238,7 @@ describe("TokenStore — service tokens", () => {
 
     it("null budget allows unlimited spend", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "unlimited", null, null);
+      const token = issueService(store,"sk_test", "unlimited", null, null);
       expect(store.checkBudget(token, 999999).allowed).toBe(true);
     });
   });
@@ -233,9 +246,9 @@ describe("TokenStore — service tokens", () => {
   describe("management", () => {
     it("lists service tokens for a key", () => {
       const store = new TokenStore(TEST_SECRET);
-      store.issueServiceToken("sk_key_a", "monitor-1");
-      store.issueServiceToken("sk_key_a", "monitor-2");
-      store.issueServiceToken("sk_key_b", "other");
+      issueService(store,"sk_key_a", "monitor-1");
+      issueService(store,"sk_key_a", "monitor-2");
+      issueService(store,"sk_key_b", "other");
 
       const hashA = hmacHash("sk_key_a", TEST_SECRET);
       const list = store.listServiceTokens(hashA);
@@ -245,7 +258,7 @@ describe("TokenStore — service tokens", () => {
 
     it("revokes by token string", () => {
       const store = new TokenStore(TEST_SECRET);
-      const token = store.issueServiceToken("sk_test", "to-revoke");
+      const token = issueService(store,"sk_test", "to-revoke");
       expect(store.resolve(token).valid).toBe(true);
       expect(store.revoke(token)).toBe(true);
       expect(store.resolve(token).valid).toBe(false);
@@ -253,9 +266,47 @@ describe("TokenStore — service tokens", () => {
 
     it("revokes by name", () => {
       const store = new TokenStore(TEST_SECRET);
-      store.issueServiceToken("sk_test", "named-token");
+      issueService(store, "sk_test", "named-token");
       const hash = hmacHash("sk_test", TEST_SECRET);
       expect(store.revokeByName(hash, "named-token")).toBe(true);
+    });
+
+    it("enforces unique names per API key", () => {
+      const store = new TokenStore(TEST_SECRET);
+      issueService(store, "sk_test", "my-monitor");
+      const result = store.issueServiceToken("sk_test", "my-monitor");
+      expect("error" in result).toBe(true);
+      if ("error" in result) {
+        expect(result.error).toContain("already exists");
+      }
+    });
+
+    it("allows same name for different API keys", () => {
+      const store = new TokenStore(TEST_SECRET);
+      issueService(store, "sk_key_a", "shared-name");
+      const result = store.issueServiceToken("sk_key_b", "shared-name");
+      expect("token" in result).toBe(true);
+    });
+
+    it("allows reuse of name after revocation", () => {
+      const store = new TokenStore(TEST_SECRET);
+      issueService(store, "sk_test", "recyclable");
+      const hash = hmacHash("sk_test", TEST_SECRET);
+      store.revokeByName(hash, "recyclable");
+      const result = store.issueServiceToken("sk_test", "recyclable");
+      expect("token" in result).toBe(true);
+    });
+
+    it("isSessionToken returns true for session tokens", () => {
+      const store = new TokenStore(TEST_SECRET);
+      const token = store.issueSessionToken("sk_test");
+      expect(store.isSessionToken(token)).toBe(true);
+    });
+
+    it("isSessionToken returns false for service tokens", () => {
+      const store = new TokenStore(TEST_SECRET);
+      const token = issueService(store, "sk_test", "svc-check");
+      expect(store.isSessionToken(token)).toBe(false);
     });
   });
 });
@@ -287,8 +338,8 @@ describe("TokenStore — tenant isolation", () => {
 
   it("service tokens are scoped to their creator's key", () => {
     const store = new TokenStore(TEST_SECRET);
-    store.issueServiceToken("sk_tenant_a", "a-monitor");
-    store.issueServiceToken("sk_tenant_b", "b-monitor");
+    issueService(store,"sk_tenant_a", "a-monitor");
+    issueService(store,"sk_tenant_b", "b-monitor");
 
     const hashA = hmacHash("sk_tenant_a", TEST_SECRET);
     const hashB = hmacHash("sk_tenant_b", TEST_SECRET);

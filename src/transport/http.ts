@@ -1,6 +1,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { extractAndValidateApiKey } from "../auth/header.js";
+import { TokenStore } from "../auth/token-store.js";
 import { createServer as createMcpServer } from "../server.js";
 import type { SkyFiConfig } from "../types/config.js";
 
@@ -9,6 +10,7 @@ const MCP_PATH = "/mcp";
 export interface HttpTransportOptions {
   port: number;
   defaultConfig: Partial<SkyFiConfig>;
+  serverSecret?: string;
 }
 
 export function startHttpTransport(options: HttpTransportOptions): ReturnType<typeof createHttpServer> {
@@ -18,6 +20,17 @@ export function startHttpTransport(options: HttpTransportOptions): ReturnType<ty
     simulate: options.defaultConfig.simulate,
   };
 
+  const store = new TokenStore(options.serverSecret ?? "dev-secret-change-in-production");
+
+  function makeConfig(apiKey: string): SkyFiConfig {
+    return {
+      api_key: apiKey,
+      api_base_url: defaults.api_base_url ?? "https://app.skyfi.com/platform-api",
+      api_version: defaults.api_version ?? "2026-03",
+      simulate: defaults.simulate ?? false,
+    };
+  }
+
   const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
     // Health check
     if (req.method === "GET" && req.url === "/health") {
@@ -26,58 +39,66 @@ export function startHttpTransport(options: HttpTransportOptions): ReturnType<ty
       return;
     }
 
-    // Only handle MCP path
     if (!req.url?.startsWith(MCP_PATH)) {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Not found" }));
       return;
     }
 
-    // Extract and validate API key for non-GET requests
-    if (req.method === "POST" || req.method === "DELETE") {
-      const authResult = extractAndValidateApiKey(req.headers["x-skyfi-api-key"], defaults);
-      if (!authResult.valid) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
+    if (req.method === "POST") {
+      const mcpToken = req.headers["x-mcp-token"] as string | undefined;
+      const rawApiKey = req.headers["x-skyfi-api-key"] as string | undefined;
+
+      // Path 1: MCP token
+      if (mcpToken) {
+        const resolution = store.resolve(mcpToken);
+        if (!resolution.valid) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
             status: "error",
-            error: {
-              code: "AUTH_MISSING",
-              message: authResult.error,
-              recoverable: false,
-            },
-          }),
-        );
+            error: { code: "TOKEN_EXPIRED", message: resolution.error, recoverable: true },
+          }));
+          return;
+        }
+        const mcpServer = createMcpServer(makeConfig(resolution.apiKey!));
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        await mcpServer.server.connect(transport);
+        await transport.handleRequest(req, res);
         return;
       }
 
-      // Per-request: create a fresh MCP server with this request's credentials.
-      // No mutable shared auth state — each request gets its own SkyFi client.
-      const mcpServer = createMcpServer(authResult.config!);
+      // Path 2: Raw API key (initialize)
+      if (rawApiKey) {
+        const authResult = extractAndValidateApiKey(rawApiKey, defaults);
+        if (!authResult.valid) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            status: "error",
+            error: { code: "AUTH_MISSING", message: authResult.error, recoverable: false },
+          }));
+          return;
+        }
+        const sessionToken = store.issueSessionToken(authResult.config!.api_key);
+        const mcpServer = createMcpServer(authResult.config!);
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        await mcpServer.server.connect(transport);
+        res.setHeader("X-MCP-Token", sessionToken);
+        await transport.handleRequest(req, res);
+        return;
+      }
 
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless mode
-      });
-
-      await mcpServer.server.connect(transport);
-      await transport.handleRequest(req, res);
+      // Path 3: Neither
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status: "error",
+        error: { code: "AUTH_MISSING", message: "Provide X-SkyFi-API-Key or X-MCP-Token.", recoverable: false },
+      }));
       return;
     }
 
-    // GET requests for SSE (no auth required for initial connection)
-    // Create a placeholder server for SSE notification streams
-    const placeholderConfig: SkyFiConfig = {
-      api_key: "sse-placeholder",
-      api_base_url: defaults.api_base_url ?? "https://app.skyfi.com/platform-api",
-      api_version: defaults.api_version ?? "2026-03",
-      simulate: defaults.simulate ?? false,
-    };
-    const mcpServer = createMcpServer(placeholderConfig);
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    });
-    await mcpServer.server.connect(transport);
-    await transport.handleRequest(req, res);
+    // Other methods
+    res.writeHead(405);
+    res.end("Method not allowed");
   });
 
   httpServer.listen(options.port, () => {

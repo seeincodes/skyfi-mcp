@@ -103,9 +103,8 @@ const ERROR_REGISTRY: Record<string, ErrorDefinition> = {
 
   // Token auth errors
   TOKEN_EXPIRED: {
-    message: "Token has expired. Re-authenticate by calling initialize with your API key.",
+    message: "Token has expired. Re-authenticate by sending your API key in the next initialize request.",
     recoverable: true,
-    retry_tool: "initialize",
   },
   TOKEN_INVALID: {
     message: "The provided token is malformed or not recognized.",
