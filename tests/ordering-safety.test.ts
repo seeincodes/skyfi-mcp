@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { QuoteStore } from "../src/guardrails/quote-store.js";
 import { FeasibilityStore } from "../src/guardrails/feasibility-store.js";
+import { executeArchiveOrderSchema, executeTaskingOrderSchema } from "../src/tools/ordering.js";
 
 describe("QuoteStore", () => {
   it("stores and validates a quote", () => {
@@ -122,7 +123,7 @@ describe("FeasibilityStore", () => {
 
 describe("ordering safety invariants", () => {
   it("execute_archive_order Zod schema rejects user_confirmed: false", async () => {
-    const { executeArchiveOrderSchema } = await import("../src/tools/ordering.js");
+
     const result = executeArchiveOrderSchema.safeParse({
       quote_id: "q_123",
       user_confirmed: false,
@@ -132,7 +133,7 @@ describe("ordering safety invariants", () => {
   });
 
   it("execute_archive_order Zod schema rejects missing user_confirmed", async () => {
-    const { executeArchiveOrderSchema } = await import("../src/tools/ordering.js");
+
     const result = executeArchiveOrderSchema.safeParse({
       quote_id: "q_123",
       idempotency_key: "key-1",
@@ -141,7 +142,7 @@ describe("ordering safety invariants", () => {
   });
 
   it("execute_archive_order Zod schema rejects missing idempotency_key", async () => {
-    const { executeArchiveOrderSchema } = await import("../src/tools/ordering.js");
+
     const result = executeArchiveOrderSchema.safeParse({
       quote_id: "q_123",
       user_confirmed: true,
@@ -150,7 +151,7 @@ describe("ordering safety invariants", () => {
   });
 
   it("execute_tasking_order Zod schema rejects user_confirmed: false", async () => {
-    const { executeTaskingOrderSchema } = await import("../src/tools/ordering.js");
+
     const result = executeTaskingOrderSchema.safeParse({
       quote_id: "q_123",
       user_confirmed: false,
@@ -160,7 +161,7 @@ describe("ordering safety invariants", () => {
   });
 
   it("no schema allows bypassing via extra fields", async () => {
-    const { executeArchiveOrderSchema } = await import("../src/tools/ordering.js");
+
     // Extra fields should be stripped, not used
     const result = executeArchiveOrderSchema.safeParse({
       quote_id: "q_123",

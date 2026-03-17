@@ -101,6 +101,25 @@ const ERROR_REGISTRY: Record<string, ErrorDefinition> = {
     recoverable: false,
   },
 
+  // Token auth errors
+  TOKEN_EXPIRED: {
+    message: "Token has expired. Re-authenticate by calling initialize with your API key.",
+    recoverable: true,
+    retry_tool: "initialize",
+  },
+  TOKEN_INVALID: {
+    message: "The provided token is malformed or not recognized.",
+    recoverable: false,
+  },
+  SCOPE_DENIED: {
+    message: "This service token does not have permission to call the requested tool.",
+    recoverable: false,
+  },
+  SERVICE_BUDGET_EXCEEDED: {
+    message: "This service token has exceeded its configured spend limit.",
+    recoverable: false,
+  },
+
   // SkyFi API errors
   SKYFI_API_ERROR: {
     message: "The SkyFi API returned an error. Check the error details and try again.",
