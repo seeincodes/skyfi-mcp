@@ -1,4 +1,3 @@
-import { area as turfArea } from "@turf/turf";
 import { booleanContains } from "@turf/turf";
 
 export interface PreAuthPolicy {

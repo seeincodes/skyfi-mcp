@@ -10,16 +10,6 @@ const mockConfig = {
   simulate: false,
 };
 
-function mockFetch(status: number, body: unknown) {
-  return vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    headers: new Headers(),
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-  });
-}
-
 describe("MCP Server integration", () => {
   let client: Client;
   let originalFetch: typeof globalThis.fetch;
