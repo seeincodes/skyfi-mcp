@@ -29,7 +29,7 @@ describe("MCP Server integration", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("lists all 16 registered tools", async () => {
+  it("lists all registered tools", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toContain("geocode");
@@ -40,6 +40,7 @@ describe("MCP Server integration", () => {
     expect(names).toContain("estimate_archive_price");
     expect(names).toContain("estimate_tasking_cost");
     expect(names).toContain("check_capture_feasibility");
+    expect(names).toContain("recommend_archive_purchase");
     expect(names).toContain("quote_archive_order");
     expect(names).toContain("execute_archive_order");
     expect(names).toContain("quote_tasking_order");
@@ -47,7 +48,7 @@ describe("MCP Server integration", () => {
     expect(names).toContain("get_order_status");
     expect(names).toContain("list_orders");
     expect(names).toContain("fetch_order_image");
-    expect(tools.length).toBe(18);
+    expect(tools.length).toBe(19);
   });
 
   it("each tool has a description", async () => {

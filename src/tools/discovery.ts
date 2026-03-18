@@ -70,6 +70,30 @@ export const checkCaptureFeasibilitySchema = z.object({
     .optional(),
 });
 
+export const recommendArchivePurchaseSchema = z.object({
+  candidates: z
+    .array(
+      z.object({
+        scene_id: z.string().min(1),
+        price_usd: z.number().positive(),
+        cloud_cover_pct: z.number().min(0).max(100).optional(),
+        resolution_m: z.number().positive().optional(),
+        captured_at: z.string().optional(),
+        provider: z.string().max(100).optional(),
+      }),
+    )
+    .min(1)
+    .max(200)
+    .describe("List of candidate scenes with price and quality metadata."),
+  strategy: z
+    .enum(["lowest_price", "highest_quality", "balanced"])
+    .default("balanced")
+    .optional()
+    .describe("Recommendation strategy."),
+  max_budget_usd: z.number().positive().optional().describe("Optional maximum budget to filter candidates."),
+  top_k: z.number().int().min(1).max(10).default(3).optional().describe("Number of ranked recommendations to return."),
+});
+
 function skyfiErrorToEnvelope(err: unknown, tool: string, startTime: number): ToolResponse {
   if (err instanceof SkyFiApiError) {
     if (err.statusCode === 401) {
@@ -266,4 +290,87 @@ export async function handleCheckCaptureFeasibility(
   } catch (err) {
     return skyfiErrorToEnvelope(err, "check_capture_feasibility", startTime);
   }
+}
+
+export async function handleRecommendArchivePurchase(
+  args: z.infer<typeof recommendArchivePurchaseSchema>,
+): Promise<ToolResponse> {
+  const startTime = Date.now();
+  const strategy = args.strategy ?? "balanced";
+  const topK = args.top_k ?? 3;
+
+  const withinBudget = args.max_budget_usd
+    ? args.candidates.filter((c) => c.price_usd <= args.max_budget_usd!)
+    : args.candidates;
+
+  if (withinBudget.length === 0) {
+    return success({
+      tool: "recommend_archive_purchase",
+      data: {
+        strategy,
+        considered_count: args.candidates.length,
+        within_budget_count: 0,
+        max_budget_usd: args.max_budget_usd ?? null,
+        recommendations: [],
+        summary:
+          "No candidates are within budget. Increase max_budget_usd or provide lower-cost scenes.",
+      },
+      startTime,
+    });
+  }
+
+  const prices = withinBudget.map((c) => c.price_usd);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const maxResolution = Math.max(
+    ...withinBudget.map((c) => c.resolution_m ?? 1),
+  );
+  const minResolution = Math.min(
+    ...withinBudget.map((c) => c.resolution_m ?? 1),
+  );
+
+  const ranked = withinBudget
+    .map((candidate) => {
+      const priceScore =
+        maxPrice === minPrice ? 1 : 1 - (candidate.price_usd - minPrice) / (maxPrice - minPrice);
+      const cloudScore = candidate.cloud_cover_pct !== undefined ? 1 - candidate.cloud_cover_pct / 100 : 0.5;
+      const resolutionScore =
+        candidate.resolution_m !== undefined && maxResolution !== minResolution
+          ? 1 - (candidate.resolution_m - minResolution) / (maxResolution - minResolution)
+          : 0.5;
+      const qualityScore = (cloudScore + resolutionScore) / 2;
+
+      const score =
+        strategy === "lowest_price"
+          ? priceScore
+          : strategy === "highest_quality"
+            ? qualityScore
+            : priceScore * 0.5 + qualityScore * 0.5;
+
+      return {
+        ...candidate,
+        score: Number(score.toFixed(4)),
+        rationale:
+          strategy === "lowest_price"
+            ? "Ranked by lowest price."
+            : strategy === "highest_quality"
+              ? "Ranked by quality (cloud cover + resolution)."
+              : "Ranked by balanced price and quality.",
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.price_usd - b.price_usd)
+    .slice(0, topK);
+
+  return success({
+    tool: "recommend_archive_purchase",
+    data: {
+      strategy,
+      considered_count: args.candidates.length,
+      within_budget_count: withinBudget.length,
+      max_budget_usd: args.max_budget_usd ?? null,
+      recommendations: ranked,
+      best_option: ranked[0] ?? null,
+    },
+    startTime,
+  });
 }

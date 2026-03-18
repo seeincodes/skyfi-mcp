@@ -57,7 +57,7 @@ describe("HTTP+SSE Transport", () => {
       const remoteNames = remoteTools.tools.map((t) => t.name).sort();
 
       expect(stdioNames).toEqual(remoteNames);
-      expect(stdioNames.length).toBe(18);
+      expect(stdioNames.length).toBe(19);
     });
 
     it("tool schemas are identical across transports", async () => {

@@ -14,13 +14,14 @@
 
 ## Tool Availability
 
-All 18 tools are available across all frameworks. No framework-specific restrictions.
+All 19 tools are available across all frameworks. No framework-specific restrictions.
 
 | Tool Category | Tools | Count |
 |--------------|-------|-------|
 | OSM/Geocoding | `geocode`, `reverse_geocode`, `get_bounding_box` | 3 |
 | Discovery | `search_archive`, `explore_open_data` | 2 |
 | Pricing | `estimate_archive_price`, `estimate_tasking_cost`, `check_capture_feasibility` | 3 |
+| Cost Intelligence | `recommend_archive_purchase` | 1 |
 | Ordering | `quote_archive_order`, `execute_archive_order`, `quote_tasking_order`, `execute_tasking_order` | 4 |
 | History | `get_order_status`, `list_orders`, `fetch_order_image` | 3 |
 | Monitoring | `setup_aoi_monitoring`, `create_webhook_subscription`, `get_notification_status` | 3 |

@@ -71,6 +71,12 @@ Header: X-MCP-Token: mcp_sess_<your_token>
 
 Your raw API key is only sent once. The session token has a 4-hour idle TTL (extends on each request) and 7-day max lifetime.
 
+## Standout Differentiators
+
+- **Reliability scorecard:** generated operational snapshot at `mcp-docs/STATUS.md` (`npm run status:refresh`)
+- **Golden demo workflow:** maritime monitoring showcase at `mcp-docs/GOLDEN_DEMO_MARITIME.md`
+- **Cost intelligence tool:** `recommend_archive_purchase` ranks options by price/quality strategy with budget filtering
+
 ## Authentication
 
 ### Token Exchange (Remote)
@@ -96,13 +102,14 @@ Service tokens support optional scopes (restrict which tools can be called) and 
 
 Local mode reads your API key from `~/.skyfi/config.json` or `SKYFI_API_KEY` env var at startup. No token exchange needed.
 
-## Tools (18)
+## Tools (19)
 
 | Category | Tools |
 |----------|-------|
 | Geocoding | `geocode`, `reverse_geocode`, `get_bounding_box` |
 | Discovery | `search_archive`, `explore_open_data` |
 | Pricing | `estimate_archive_price`, `estimate_tasking_cost`, `check_capture_feasibility` |
+| Cost Intelligence | `recommend_archive_purchase` |
 | Ordering | `quote_archive_order`, `execute_archive_order`, `quote_tasking_order`, `execute_tasking_order` |
 | History | `get_order_status`, `list_orders`, `fetch_order_image` |
 | Monitoring | `setup_aoi_monitoring`, `create_webhook_subscription`, `get_notification_status` |

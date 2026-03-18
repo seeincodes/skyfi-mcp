@@ -6,6 +6,7 @@ import {
   handleEstimateArchivePrice,
   handleEstimateTaskingCost,
   handleCheckCaptureFeasibility,
+  handleRecommendArchivePurchase,
 } from "../src/tools/discovery.js";
 
 const SMALL_AOI: GeoJSON.Polygon = {
@@ -256,6 +257,43 @@ describe("check_capture_feasibility", () => {
     expect(result.status).toBe("error");
     if (result.status === "error") {
       expect(result.error.code).toBe("AOI_TOO_LARGE");
+    }
+  });
+});
+
+describe("recommend_archive_purchase", () => {
+  it("returns ranked recommendations with balanced strategy", async () => {
+    const result = await handleRecommendArchivePurchase({
+      strategy: "balanced",
+      top_k: 2,
+      candidates: [
+        { scene_id: "s1", price_usd: 120, cloud_cover_pct: 10, resolution_m: 0.5 },
+        { scene_id: "s2", price_usd: 90, cloud_cover_pct: 20, resolution_m: 1.0 },
+        { scene_id: "s3", price_usd: 150, cloud_cover_pct: 5, resolution_m: 0.3 },
+      ],
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.tool).toBe("recommend_archive_purchase");
+      expect((result.data.recommendations as unknown[]).length).toBe(2);
+      expect(result.data.best_option).toBeTruthy();
+    }
+  });
+
+  it("filters by budget and can return empty recommendations", async () => {
+    const result = await handleRecommendArchivePurchase({
+      max_budget_usd: 50,
+      candidates: [
+        { scene_id: "s1", price_usd: 120, cloud_cover_pct: 10 },
+        { scene_id: "s2", price_usd: 90, cloud_cover_pct: 20 },
+      ],
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.data.within_budget_count).toBe(0);
+      expect(result.data.recommendations).toEqual([]);
     }
   });
 });

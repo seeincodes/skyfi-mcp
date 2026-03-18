@@ -20,11 +20,13 @@ import {
   handleEstimateArchivePrice,
   handleEstimateTaskingCost,
   handleCheckCaptureFeasibility,
+  handleRecommendArchivePurchase,
   searchArchiveSchema,
   exploreOpenDataSchema,
   estimateArchivePriceSchema,
   estimateTaskingCostSchema,
   checkCaptureFeasibilitySchema,
+  recommendArchivePurchaseSchema,
 } from "./tools/discovery.js";
 import {
   handleQuoteArchiveOrder,
@@ -168,6 +170,16 @@ export function createServer(config: SkyFiConfig, tokenMgmt?: TokenManagement): 
     inputSchema: checkCaptureFeasibilitySchema.shape,
   }, async (args) => {
     const result = await handleCheckCaptureFeasibility(args as z.infer<typeof checkCaptureFeasibilitySchema>, skyfi);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  });
+
+  server.registerTool("recommend_archive_purchase", {
+    description:
+      "Rank candidate archive scenes by cost, quality, or a balanced strategy. " +
+      "Use this after search/pricing to pick the best scene under an optional budget.",
+    inputSchema: recommendArchivePurchaseSchema.shape,
+  }, async (args) => {
+    const result = await handleRecommendArchivePurchase(args as z.infer<typeof recommendArchivePurchaseSchema>);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
 
